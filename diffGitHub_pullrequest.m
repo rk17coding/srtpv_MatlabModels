@@ -29,8 +29,8 @@ function diffGitHub_pullrequest(branchname)
     % Wrapped in try/catch in case toolbox settings are not registered on runner
     try
         s = settings().comparisons.slx.DisplayReportScreenshots;
-        s.TemporaryValue = false;
-        disp('DisplayReportScreenshots set to false (headless mode).');
+        s.TemporaryValue = true;
+        disp('DisplayReportScreenshots set to true (headless mode).');
     catch ME
         fprintf('[WARN] Could not set DisplayReportScreenshots: %s\n', ME.message);
         fprintf('[WARN] Report may fail if display is required.\n');
