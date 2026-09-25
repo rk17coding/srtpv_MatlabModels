@@ -33,11 +33,10 @@ jobs:
        #   command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
 
       - name: Compare Models to Ancestors
-        uses: matlab-actions/run-command@v2.1.1
-        env:
-          DISPLAY: ":99" # Creates a virtual display background channel
-        with:
-          command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          xvfb-run --auto-servernum matlab -batch "branch = '${{ github.head_ref }}'; diffGitHub_pullrequest(branch);"
+
 
 
       - name: Debug — list generated report files
