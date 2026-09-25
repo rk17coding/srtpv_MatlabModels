@@ -64,13 +64,18 @@ function report = diffToAncestor(tempFolder, reportFolder, fileName)
     try
         comp   = visdiff(ancestor, fileName);
         filter(comp, 'unfiltered');
-        report = publish(comp, 'html', 'OutputFolder', reportFolder);
+        
+        % FIX: Pass the format explicitly as a Name-Value pair
+        report = publish(comp, 'Format', 'pdf', 'OutputFolder', reportFolder);
+
+        
         fprintf('Report written: %s\n', report);
     catch ME
         fprintf('[ERROR] visdiff/publish failed for %s\n', fileName);
         fprintf('Reason  : %s\n', ME.message);
     end
 end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
