@@ -32,10 +32,19 @@ jobs:
        #   command: xvfb-run -a matlab -batch "branch = '${{ github.head_ref }}'; diffGitHub_pullrequest(branch);
        #   command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
 
-      - name: Compare Models to Ancestors
+      - name: Install and Start Virtual Display (Xvfb)
         run: |
           sudo apt-get update && sudo apt-get install -y xvfb
-          xvfb-run --auto-servernum matlab -batch "branch = '${{ github.head_ref }}'; diffGitHub_pullrequest(branch);"
+          # Start Xvfb in the background on port :99
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      - name: Compare Models to Ancestors
+        uses: matlab-actions/run-command@v2.1.1
+        env:
+          DISPLAY: :99
+        with:
+          command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
 
 
 
