@@ -46,6 +46,7 @@ jobs:
         with:
           name: diffreports
           path: |
-            ${{ github.workspace }}/*.html
-            ${{ github.workspace }}/*.pdf
+            ${{ github.workspace }}/**/*.html
+            ${{ github.workspace }}/**/*.pdf
+            ${{ github.workspace }}/**/*.png
           if-no-files-found: warn
