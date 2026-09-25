@@ -1,10 +1,8 @@
 function diffGitHub_pullrequest(branchname)
     proj = openProject(pwd);
 
-    % List modified .slx files between main and the PR branch
     gitCommand = sprintf( ...
-        'git --no-pager diff --name-only origin/main..origin/%s', ...
-        branchname);
+        'git --no-pager diff --name-only origin/main..origin/%s', branchname);
     [status, modifiedFiles] = system(gitCommand);
 
     if status ~= 0
@@ -12,13 +10,10 @@ function diffGitHub_pullrequest(branchname)
         return;
     end
 
-    % Split output into lines and remove empty entries
+    % Split into lines, remove empty, keep only .slx files
     modifiedFiles = strtrim(splitlines(strtrim(modifiedFiles)));
     modifiedFiles = modifiedFiles(~cellfun('isempty', modifiedFiles));
-
-    % Keep only .slx files
-    isSlx = endsWith(modifiedFiles, '.slx');
-    modifiedFiles = modifiedFiles(isSlx);
+    modifiedFiles = modifiedFiles(endsWith(modifiedFiles, '.slx'));
 
     if isempty(modifiedFiles)
         disp('No modified .slx models to compare.');
@@ -27,16 +22,21 @@ function diffGitHub_pullrequest(branchname)
 
     fprintf('Found %d modified model(s):\n', numel(modifiedFiles));
     for i = 1:numel(modifiedFiles)
-        fprintf('  %s\n', modifiedFiles{i});   % cell indexing with {}
+        fprintf('  %s\n', modifiedFiles{i});
     end
 
-    % R2023a FIX: disable screenshots for headless Linux CI runner
-    % Without this, publish() fails with "Printing not supported in -nodisplay mode"
-    s = settings().comparisons.slx.DisplayReportScreenshots;
-    s.TemporaryValue = false;
+    % R2023a headless fix: disable screenshots so publish works without display
+    % Wrapped in try/catch in case toolbox settings are not registered on runner
+    try
+        s = settings().comparisons.slx.DisplayReportScreenshots;
+        s.TemporaryValue = false;
+        disp('DisplayReportScreenshots set to false (headless mode).');
+    catch ME
+        fprintf('[WARN] Could not set DisplayReportScreenshots: %s\n', ME.message);
+        fprintf('[WARN] Report may fail if display is required.\n');
+    end
 
-    % Temp folder for ancestor copies; reports go to project root
-    tempFolder  = fullfile(proj.RootFolder, 'modelscopy');
+    tempFolder   = fullfile(proj.RootFolder, 'modelscopy');
     reportFolder = proj.RootFolder;
     mkdir(tempFolder);
 
@@ -44,7 +44,6 @@ function diffGitHub_pullrequest(branchname)
         diffToAncestor(tempFolder, reportFolder, modifiedFiles{i});
     end
 
-    % Clean up temp folder
     rmdir(tempFolder, 's');
 end
 
@@ -52,8 +51,8 @@ end
 
 function report = diffToAncestor(tempFolder, reportFolder, fileName)
     report = [];
-
     ancestor = getAncestor(tempFolder, fileName);
+
     if isempty(ancestor)
         fprintf('Skipping %s — new file, no ancestor on main.\n', fileName);
         return
@@ -63,15 +62,13 @@ function report = diffToAncestor(tempFolder, reportFolder, fileName)
     fprintf('Ancestor  : %s\n', ancestor);
 
     try
-        % Generate the official MathWorks File Comparison Report
         comp   = visdiff(ancestor, fileName);
         filter(comp, 'unfiltered');
         report = publish(comp, 'html', 'OutputFolder', reportFolder);
         fprintf('Report written: %s\n', report);
-
     catch ME
         fprintf('[ERROR] visdiff/publish failed for %s\n', fileName);
-        fprintf('Reason : %s\n', ME.message);
+        fprintf('Reason  : %s\n', ME.message);
     end
 end
 
@@ -79,21 +76,15 @@ end
 
 function ancestor = getAncestor(tempFolder, fileName)
     [~, name, ext] = fileparts(fileName);
-
-    % Normalize path separators for git
     fileName = strrep(fileName, '\', '/');
+    ancestor = strrep( ...
+        fullfile(tempFolder, [name '_ancestor' ext]), '\', '/');
 
-    % Ancestor file path inside temp folder
-    ancestorName = [name, '_ancestor', ext];
-    ancestor     = strrep(fullfile(tempFolder, ancestorName), '\', '/');
-
-    % Extract the ancestor version from main branch
-    gitCommand = sprintf('git --no-pager show origin/main:%s > %s', ...
-                         fileName, ancestor);
-    [status, msg] = system(gitCommand);
+    gitCommand = sprintf( ...
+        'git --no-pager show origin/main:%s > %s', fileName, ancestor);
+    [status, ~] = system(gitCommand);
 
     if status ~= 0
-        fprintf('No ancestor found for %s (new file): %s\n', fileName, msg);
         ancestor = [];
     end
 end
