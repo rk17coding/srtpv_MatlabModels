@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5          # Node 24 native
+        uses: actions/checkout@v5          # Node 24 native new
         with:
           fetch-depth: 0
 
