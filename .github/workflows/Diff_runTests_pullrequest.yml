@@ -1,4 +1,4 @@
-name: PullRequest - Diff to Ancestor, Publish and attach Report, and Run Project Tests
+name: PullRequest - Diff to Ancestor, Publish and attach Report
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   my-job:
-    name: Diff to Ancestor, Publish and attach Report, and Run Project Tests
+    name: Diff to Ancestor, Publish and attach Report
     runs-on: ubuntu-latest
 
     steps:
@@ -19,13 +19,14 @@ jobs:
         uses: matlab-actions/setup-matlab@v3
         with:
           release: R2023a
+          products: Simulink Simulink_Test   # ensures comparison toolbox is present
 
       - name: Compare Models to Ancestors
         uses: matlab-actions/run-command@v2.1.1
         with:
           command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
 
-      - name: List generated HTML reports (debug)
+      - name: Debug — list HTML files
         if: always()
         run: |
           echo "=== HTML files in workspace ==="
