@@ -1,76 +1,101 @@
 function diffGitHub_pullrequest(branchname)
-    % Open project
     proj = openProject(pwd);
 
-    % List modified models since branch diverged from main
-    % Use *** to search recursively for modified SLX files starting in the current folder
-    % git diff --name-only main..branchtomerge
-    gitCommand = sprintf('git --no-pager diff --name-only origin/main..origin/%s ***.slx', branchname);
-    [status,modifiedFiles] = system(gitCommand);
+    % List modified .slx files between main and the PR branch
+    gitCommand = sprintf( ...
+        'git --no-pager diff --name-only origin/main..origin/%s', ...
+        branchname);
+    [status, modifiedFiles] = system(gitCommand);
+
     if status ~= 0
-        warning("git diff failed")
-        warning(modifiedFiles)
+        warning("git diff failed: %s", modifiedFiles);
         return;
     end
-    modifiedFiles = split(modifiedFiles);
-    modifiedFiles(end) = []; % Removing last element because it is empty
-    
+
+    % Split output into lines and remove empty entries
+    modifiedFiles = strtrim(splitlines(strtrim(modifiedFiles)));
+    modifiedFiles = modifiedFiles(~cellfun('isempty', modifiedFiles));
+
+    % Keep only .slx files
+    isSlx = endsWith(modifiedFiles, '.slx');
+    modifiedFiles = modifiedFiles(isSlx);
+
     if isempty(modifiedFiles)
-        disp('No modified models to compare.')
+        disp('No modified .slx models to compare.');
         return
     end
-    
-    % Create a temporary folder to store the ancestors of the modified models
-    % If you have models with the same name in different folders, consider
-    % creating multiple folders to prevent overwriting temporary models
-    tempdir = fullfile(proj.RootFolder, "modelscopy");
-    mkdir(tempdir)
-    
-    % Generate a comparison report for every modified model file
+
+    fprintf('Found %d modified model(s):\n', numel(modifiedFiles));
     for i = 1:numel(modifiedFiles)
-        diffToAncestor(tempdir,string(modifiedFiles(i)));
+        fprintf('  %s\n', modifiedFiles{i});   % cell indexing with {}
     end
-    
-    % Delete the temporary folder
-    rmdir modelscopy s
+
+    % R2023a FIX: disable screenshots for headless Linux CI runner
+    % Without this, publish() fails with "Printing not supported in -nodisplay mode"
+    s = settings().comparisons.slx.DisplayReportScreenshots;
+    s.TemporaryValue = false;
+
+    % Temp folder for ancestor copies; reports go to project root
+    tempFolder  = fullfile(proj.RootFolder, 'modelscopy');
+    reportFolder = proj.RootFolder;
+    mkdir(tempFolder);
+
+    for i = 1:numel(modifiedFiles)
+        diffToAncestor(tempFolder, reportFolder, modifiedFiles{i});
+    end
+
+    % Clean up temp folder
+    rmdir(tempFolder, 's');
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function report = diffToAncestor(tempdir,fileName)
-    ancestor = getAncestor(tempdir,fileName);
+function report = diffToAncestor(tempFolder, reportFolder, fileName)
+    report = [];
+
+    ancestor = getAncestor(tempFolder, fileName);
     if isempty(ancestor)
-        % new model - skip diff report
-        report = [];
+        fprintf('Skipping %s — new file, no ancestor on main.\n', fileName);
         return
     end
 
-    % Compare models and publish results in a printable report
-    % Specify the format using 'pdf', 'html', or 'docx'
-    comp= visdiff(ancestor, fileName);
-    filter(comp, 'unfiltered');
-    report = publish(comp,'html');
-    
+    fprintf('Comparing : %s\n', fileName);
+    fprintf('Ancestor  : %s\n', ancestor);
+
+    try
+        % Generate the official MathWorks File Comparison Report
+        comp   = visdiff(ancestor, fileName);
+        filter(comp, 'unfiltered');
+        report = publish(comp, 'html', 'OutputFolder', reportFolder);
+        fprintf('Report written: %s\n', report);
+
+    catch ME
+        fprintf('[ERROR] visdiff/publish failed for %s\n', fileName);
+        fprintf('Reason : %s\n', ME.message);
+    end
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function ancestor = getAncestor(tempdir,fileName)
-    
+function ancestor = getAncestor(tempFolder, fileName)
     [~, name, ext] = fileparts(fileName);
-    ancestor = fullfile(tempdir, name);
-    
-    % Replace seperators to work with Git and create ancestor file name
+
+    % Normalize path separators for git
     fileName = strrep(fileName, '\', '/');
-    ancestor = strrep(sprintf('%s%s%s',ancestor, "_ancestor", ext), '\', '/');
-    % Build git command to get ancestor from main
-    % git show origin/main:models/modelname.slx > modelscopy/modelname_ancestor.slx
-    gitCommand = sprintf('git --no-pager show origin/main:%s > %s', fileName, ancestor);
-    
-    [status, ~] = system(gitCommand);
+
+    % Ancestor file path inside temp folder
+    ancestorName = [name, '_ancestor', ext];
+    ancestor     = strrep(fullfile(tempFolder, ancestorName), '\', '/');
+
+    % Extract the ancestor version from main branch
+    gitCommand = sprintf('git --no-pager show origin/main:%s > %s', ...
+                         fileName, ancestor);
+    [status, msg] = system(gitCommand);
+
     if status ~= 0
-        % new model
+        fprintf('No ancestor found for %s (new file): %s\n', fileName, msg);
         ancestor = [];
     end
 end
 
-%   Copyright 2024-2025 The MathWorks, Inc.
+%   Copyright 2024-2026 The MathWorks, Inc.

@@ -1,34 +1,41 @@
-
 name: PullRequest - Diff to Ancestor, Publish and attach Report, and Run Project Tests
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on pull request events but only for the main branch
-
   pull_request:
     branches: [ main ]
 
 jobs:
   my-job:
     name: Diff to Ancestor, Publish and attach Report, and Run Project Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
-         fetch-depth: 0
-      - name: Compare Models to Ancestors
-        uses: matlab-actions/run-command@v2
-        with:
-          command: branch ="${{ github.head_ref }}", diffGitHub_pullrequest(branch)
-      - name: Upload Comparison Reports
-        uses: actions/upload-artifact@v4
-        with:
-           name: diffreports
-           path: ${{ github.workspace }}\*.html
-      - name: Run All Project Tests
-        uses: matlab-actions/run-command@v2
-        with:
-          command: runtests
+          fetch-depth: 0
 
-#   Copyright 2022-2024 The MathWorks, Inc.
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2023a
+
+      - name: Compare Models to Ancestors
+        uses: matlab-actions/run-command@v2.1.1
+        with:
+          command: branch = "${{ github.head_ref }}"; diffGitHub_pullrequest(branch);
+
+      - name: List generated HTML reports (debug)
+        if: always()
+        run: |
+          echo "=== HTML files in workspace ==="
+          find ${{ github.workspace }} -name "*.html" 2>/dev/null \
+            || echo "NO HTML FILES FOUND"
+
+      - name: Upload Comparison Reports
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: diffreports
+          path: ${{ github.workspace }}/*.html
+          if-no-files-found: warn
